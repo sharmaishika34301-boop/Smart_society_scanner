@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Society Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: left = virtual gate + RFID cards + serial monitor; right = society dashboard. Stacks on phones. */
+:root {
+  --bg: #0e1215;
+  --surface: #151b20;
+  --surface2: #1c242b;
+  --line: #2a343c;
+  --fg: #e6ebee;
+  --muted: #8d9aa4;
+  --accent: #f2b01e;
+  --accent-ink: #1a1203;
+  --good: #3ddc84;
+  --good-bg: rgba(61,220,132,.14);
+  --bad: #ff5d5d;
+  --bad-bg: rgba(255,93,93,.14);
+  --road: #222b32;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eef1f3; --surface: #ffffff; --surface2: #f3f6f8; --line: #d5dde3;
+    --fg: #14191d; --muted: #5c6a74; --accent: #c98a00; --accent-ink: #ffffff;
+    --good: #12894a; --good-bg: rgba(18,137,74,.12); --bad: #cc2f2f; --bad-bg: rgba(204,47,47,.1);
+    --road: #dfe5ea; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #eef1f3; --surface: #ffffff; --surface2: #f3f6f8; --line: #d5dde3;
+  --fg: #14191d; --muted: #5c6a74; --accent: #c98a00; --accent-ink: #ffffff;
+  --good: #12894a; --good-bg: rgba(18,137,74,.12); --bad: #cc2f2f; --bad-bg: rgba(204,47,47,.1);
+  --road: #dfe5ea; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45; padding-inline: 16px; padding-block: 0 32px; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0; font-weight: 700; text-wrap: balance; }
+.wrap { max-width: 1280px; margin-inline: auto; }
+
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; padding-block: 20px; border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.brand-mark { width: 40px; height: 40px; flex: none; }
+.brand h1 { font-size: 1.7rem; letter-spacing: .01em; line-height: 1; }
+.brand p { margin: 4px 0 0; color: var(--muted); font-size: .85rem; }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; font-size: .8rem; color: var(--muted); background: var(--surface); }
+.pill b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); animation: pulse 1.6s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--good-bg), 0 0 0 0 var(--good); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; padding-top: 20px; align-items: start; }
+.col { display: grid; gap: 20px; min-width: 0; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px; margin-bottom: 14px; }
+.panel-head h2 { font-size: 1.15rem; letter-spacing: .04em; text-transform: uppercase; }
+.panel-head span { color: var(--muted); font-size: .8rem; }
+
+/* Gate scene */
+.scene { background: var(--surface2); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.scene svg { display: block; width: 100%; height: auto; }
+.s-road { fill: var(--road); }
+.s-line { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 10 10; opacity: .5; }
+.s-body { fill: var(--surface); stroke: var(--line); stroke-width: 2; }
+.s-text { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+.s-text-strong { fill: var(--fg); font-family: var(--font-display); font-weight: 700; font-size: 14px; letter-spacing: .06em; }
+.s-arm-a { fill: var(--accent); } .s-arm-b { fill: var(--fg); }
+.s-pivot { fill: var(--line); stroke: var(--muted); stroke-width: 2; }
+#arm { transform-origin: 360px 176px; transition: transform .7s cubic-bezier(.3,.7,.3,1); }
+#led { fill: var(--muted); transition: fill .15s; }
+#led.scan { fill: var(--accent); } #led.ok { fill: var(--good); } #led.deny { fill: var(--bad); }
+#ledGlow { opacity: 0; transition: opacity .15s; fill: var(--muted); }
+#ledGlow.scan { opacity: .35; fill: var(--accent); } #ledGlow.ok { opacity: .35; fill: var(--good); } #ledGlow.deny { opacity: .35; fill: var(--bad); }
+.scene-bar { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 10px 14px; border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: .78rem; color: var(--muted); }
+.scene-bar b { color: var(--fg); font-weight: 500; }
+
+/* RFID cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.rfid { text-align: left; font: inherit; color: var(--fg); cursor: pointer; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-height: 108px; display: grid; grid-template-rows: auto 1fr auto; gap: 6px; background: linear-gradient(145deg, var(--surface2), var(--surface)); transition: transform .12s, border-color .12s; position: relative; }
+.rfid:hover:not(:disabled) { transform: translateY(-3px); border-color: var(--accent); }
+.rfid:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rfid:disabled { opacity: .55; cursor: wait; }
+.rfid .top { display: flex; justify-content: space-between; align-items: center; }
+.chip { width: 26px; height: 20px; border-radius: 4px; background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, var(--surface2))); }
+.rfid .tag { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-family: var(--font-mono); }
+.rfid .nm { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; line-height: 1.1; align-self: end; overflow-wrap: anywhere; }
+.rfid .uid { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); }
+.rfid.blocked .tag { color: var(--bad); }
+.rfid.unknown { border-style: dashed; }
+.hint { margin: 0 0 12px; color: var(--muted); font-size: .85rem; }
+
+/* Serial monitor */
+.serial { background: #0a0d0f; color: #b9c7cf; font-family: var(--font-mono); font-size: .76rem; line-height: 1.55; border-radius: 8px; padding: 12px; height: 230px; overflow-y: auto; border: 1px solid var(--line); }
+:root[data-theme="light"] .serial { background: #10161a; }
+.serial div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.serial .ok { color: #3ddc84; } .serial .bad { color: #ff7b7b; } .serial .acc { color: #f2b01e; } .serial .dim { color: #6c7a84; }
+
+/* Dashboard */
+.banner { border-radius: 10px; padding: 26px 20px; text-align: center; border: 1px solid var(--line); background: var(--surface); transition: background .25s, border-color .25s; min-height: 150px; display: grid; align-content: center; gap: 4px; }
+.banner.granted { background: var(--good-bg); border-color: var(--good); }
+.banner.denied { background: var(--bad-bg); border-color: var(--bad); }
+.banner .lbl { font-size: .75rem; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.banner .big { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.9rem, 5vw, 2.8rem); line-height: 1.05; }
+.banner.granted .big { color: var(--good); } .banner.denied .big { color: var(--bad); }
+.banner .who { font-size: 1.05rem; }
+.banner .sub { color: var(--muted); font-size: .88rem; min-height: 1.3em; }
+
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--surface2); }
+.stat .n { font-family: var(--font-display); font-weight: 700; font-size: 2rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat .c { color: var(--muted); font-size: .78rem; margin-top: 4px; }
+.stat.g .n { color: var(--good); } .stat.r .n { color: var(--bad); }
+
+.tablebox { overflow-x: auto; max-height: 330px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+th { position: sticky; top: 0; background: var(--surface2); text-align: left; font-weight: 600; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 9px 12px; white-space: nowrap; }
+td { padding: 9px 12px; border-top: 1px solid var(--line); white-space: nowrap; }
+td.mono, .mono { font-family: var(--font-mono); font-size: .8rem; font-variant-numeric: tabular-nums; }
+tr.fresh td { animation: flash 1.4s ease-out; }
+@keyframes flash { from { background: var(--surface2); } to { background: transparent; } }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .72rem; font-weight: 600; letter-spacing: .04em; }
+.badge.GRANTED, .badge.on { background: var(--good-bg); color: var(--good); }
+.badge.DENIED, .badge.off { background: var(--bad-bg); color: var(--bad); }
+.empty { padding: 22px; text-align: center; color: var(--muted); }
+.foot { margin: 10px 0 0; color: var(--muted); font-size: .78rem; }
+
+button { font: inherit; cursor: pointer; }
+.btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 10px 16px; font-weight: 600; }
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+.btn.ghost:hover { border-color: var(--accent); }
+.btn.sm { padding: 4px 10px; font-size: .76rem; border-radius: 6px; }
+form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; align-items: end; }
+label { display: grid; gap: 4px; font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); min-width: 0; }
+input { font: inherit; letter-spacing: normal; text-transform: none; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface2); color: var(--fg); width: 100%; min-width: 0; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.msg { grid-column: 1 / -1; min-height: 1.2em; font-size: .85rem; color: var(--muted); }
+
+select { font: inherit; letter-spacing: normal; text-transform: none; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface2); color: var(--fg); width: 100%; min-width: 0; }
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.banner.pending { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: var(--accent); }
+.banner.pending .big { color: var(--accent); }
+.badge.PENDING { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent); }
+.phone { margin: 14px auto 0; width: 100%; max-width: 360px; border: 6px solid var(--line); border-radius: 28px; background: var(--surface2); padding: 14px 12px 16px; display: grid; gap: 12px; }
+.p-status { display: flex; justify-content: space-between; gap: 8px; font-size: .76rem; color: var(--muted); font-family: var(--font-mono); }
+.p-list { display: grid; gap: 10px; max-height: 300px; min-height: 120px; overflow-y: auto; align-content: start; }
+.p-empty { color: var(--muted); font-size: .85rem; text-align: center; padding: 28px 8px; }
+.notif { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: grid; gap: 4px; }
+.notif.pending { border-color: var(--accent); }
+.notif.allowed { border-color: var(--good); }
+.notif.declined, .notif.expired { border-color: var(--bad); }
+.n-top { display: flex; justify-content: space-between; gap: 8px; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.n-title { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; }
+.n-body { font-size: .88rem; }
+.n-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.phone.ring { animation: ring .6s; }
+@keyframes ring { 0%, 100% { transform: translateX(0); } 15% { transform: translateX(-6px) rotate(-1deg); } 30% { transform: translateX(6px) rotate(1deg); } 45% { transform: translateX(-5px); } 60% { transform: translateX(5px); } 80% { transform: translateX(-2px); } }
+@media (prefers-reduced-motion: reduce) { .phone.ring { animation: none; } }
+@media (max-width: 980px) { main { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 520px) { .stats { grid-template-columns: 1fr; } .stat { display: flex; justify-content: space-between; align-items: center; } }
+@media (prefers-reduced-motion: reduce) { #arm, .rfid, .banner { transition: none; } .dot, tr.fresh td { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="1" y="1" width="38" height="38" rx="8" fill="var(--surface2)" stroke="var(--line)" stroke-width="2"/>
+        <rect x="8" y="22" width="24" height="5" rx="1" fill="var(--accent)"/>
+        <rect x="8" y="12" width="4" height="20" fill="var(--fg)"/>
+        <circle cx="10" cy="12" r="2.5" fill="var(--good)"/>
+      </svg>
+      <div>
+        <h1>Smart Society Scanner</h1>
+        <p>RFID gate control for residential societies</p>
+      </div>
+    </div>
+    <div class="pills">
+      <span class="pill"><span class="dot"></span>Live &middot; refreshes every 2s</span>
+      <span class="pill">Simulated ESP32 + Flask</span>
+      <span class="pill" id="clock"><b>--:--:--</b></span>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT: hardware side -->
+    <div class="col">
+      <section class="panel" aria-labelledby="gateH">
+        <div class="panel-head"><h2 id="gateH">Main Gate</h2><span>Gate 1 &middot; SG90 servo</span></div>
+        <div class="scene">
+          <svg viewBox="0 0 600 260" role="img" aria-label="Boom barrier gate with an RFID reader beside the road">
+            <rect class="s-road" x="0" y="196" width="600" height="64"/>
+            <line class="s-line" x1="0" y1="228" x2="600" y2="228"/>
+            <!-- RFID reader pedestal -->
+            <rect class="s-body" x="64" y="104" width="14" height="92"/>
+            <rect class="s-body" x="40" y="52" width="86" height="64" rx="8"/>
+            <circle id="ledGlow" cx="83" cy="76" r="17"/>
+            <circle id="led" cx="83" cy="76" r="7"/>
+            <text class="s-text-strong" x="83" y="102" text-anchor="middle">RC522</text>
+            <text class="s-text" x="83" y="40" text-anchor="middle">tap card here</text>
+            <!-- Servo post -->
+            <rect class="s-body" x="338" y="148" width="44" height="48" rx="4"/>
+            <text class="s-text" x="360" y="190" text-anchor="middle">SG90</text>
+            <!-- Boom arm: closed = horizontal, open = rotated up -->
+            <g id="arm" style="transform: rotate(0deg)">
+              <rect class="s-arm-b" x="360" y="170" width="200" height="12" rx="3"/>
+              <rect class="s-arm-a" x="400" y="170" width="28" height="12"/>
+              <rect class="s-arm-a" x="456" y="170" width="28" height="12"/>
+              <rect class="s-arm-a" x="512" y="170" width="28" height="12"/>
+            </g>
+            <circle class="s-pivot" cx="360" cy="176" r="9"/>
+          </svg>
+          <div class="scene-bar">
+            <span>Gate: <b id="gateState">CLOSED</b></span>
+            <span>Servo: <b id="servoAngle">0&deg;</b></span>
+            <span>Reader: <b id="readerState">ready</b></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="visH">
+        <div class="panel-head"><h2 id="visH">Visitor Check-in</h2><span>Guest, delivery or service</span></div>
+        <p class="hint">A visitor taps the pass handed out at the gate. The resident gets a notification on their phone and decides whether to let them in.</p>
+        <form id="visForm">
+          <label for="vName">Visitor name<input id="vName" maxlength="40" value="Ankit Mehra" required></label>
+          <label for="vWho">Meeting<select id="vWho"></select></label>
+          <label for="vPurpose">Purpose
+            <select id="vPurpose">
+              <option>Guest</option><option>Delivery</option><option>Cab pickup</option><option>Service visit</option>
+            </select>
+          </label>
+          <button class="btn" id="vTap" type="submit">Tap visitor pass</button>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="cardsH">
+        <div class="panel-head"><h2 id="cardsH">RFID Cards</h2><span>Tap a card on the reader</span></div>
+        <p class="hint">Each card is one resident's key tag. Click a card to scan it, exactly like holding it up to the RC522.</p>
+        <div class="cards" id="cards"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="serialH">
+        <div class="panel-head"><h2 id="serialH">ESP32 Serial Monitor</h2><span>115200 baud</span></div>
+        <div class="serial" id="serial" role="log" aria-live="off"></div>
+      </section>
+    </div>
+
+    <!-- RIGHT: dashboard -->
+    <div class="col">
+      <section class="banner idle" id="banner" aria-live="polite">
+        <div class="lbl">Gate Status</div>
+        <div class="big" id="bBig">Waiting for scan</div>
+        <div class="who" id="bWho">Tap a card on the reader to begin.</div>
+        <div class="sub" id="bSub"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="phoneH">
+        <div class="panel-head"><h2 id="phoneH">Resident's Phone</h2><span>Society Gate app notifications</span></div>
+        <label for="pSel">View phone of<select id="pSel"></select></label>
+        <div class="phone" id="phone">
+          <div class="p-status"><span id="phoneName"></span><span>Society Gate</span></div>
+          <div class="p-list" id="phoneList" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="stats">
+          <div class="stat g"><div class="n" id="sG">0</div><div class="c">Access granted</div></div>
+          <div class="stat r"><div class="n" id="sD">0</div><div class="c">Access denied</div></div>
+          <div class="stat"><div class="n" id="sR">0</div><div class="c">Registered residents</div></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="liveH">
+        <div class="panel-head"><h2 id="liveH">Live Entries</h2><span>Newest first</span></div>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th>Time</th><th>Resident</th><th>Flat</th><th>Card UID</th><th>Result</th><th>Detail</th></tr></thead>
+            <tbody id="logBody"></tbody>
+          </table>
+        </div>
+        <p class="foot">The three oldest rows are sample history so the log is not empty.</p>
+      </section>
+
+      <section class="panel" aria-labelledby="resH">
+        <div class="panel-head"><h2 id="resH">Residents</h2><span>Block a card to see access denied</span></div>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th>Name</th><th>Flat</th><th>Card UID</th><th>Card</th></tr></thead>
+            <tbody id="resBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="regH">
+        <div class="panel-head"><h2 id="regH">Register a Card</h2><span>Adds a new card to the wallet</span></div>
+        <form id="regForm">
+          <label for="rName">Resident name<input id="rName" maxlength="40" placeholder="Neha Gupta" required></label>
+          <label for="rFlat">Flat<input id="rFlat" maxlength="10" placeholder="E-505" required></label>
+          <label for="rUid">Card UID<input id="rUid" class="mono" placeholder="A1:B2:C3:D4" required></label>
+          <div class="form-actions">
+            <button class="btn" type="submit">Register</button>
+            <button class="btn ghost" type="button" id="randUid">Random UID</button>
+          </div>
+          <div class="msg" id="regMsg"></div>
+        </form>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  function h(tag, props) {
+    var e = document.createElement(tag);
+    if (props) for (var k in props) {
+      if (k === "class") e.className = props[k];
+      else if (k.indexOf("on") === 0) e[k] = props[k];
+      else e.setAttribute(k, props[k]);
+    }
+    for (var i = 2; i < arguments.length; i++) {
+      var c = arguments[i];
+      if (c == null) continue;
+      e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    }
+    return e;
+  }
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+  /* ---------- Data (same rules as the Flask backend) ---------- */
+  var residents = [
+    { uid: "A1:B2:C3:D4", name: "Rahul Sharma", flat: "A-101", active: true },
+    { uid: "11:22:33:44", name: "Priya Patel", flat: "B-202", active: true },
+    { uid: "55:66:77:88", name: "Amit Verma", flat: "C-303", active: false },
+    { uid: "DE:AD:BE:EF", name: "Sneha Iyer", flat: "D-404", active: true }
+  ];
+  var UNKNOWN_UID = "99:99:99:99";
+  var now0 = Date.now();
+  var logs = [
+    { uid: "11:22:33:44", name: "Priya Patel", flat: "B-202", status: "GRANTED", reason: "Welcome!", ts: now0 - 4 * 60000 },
+    { uid: "77:12:AB:09", name: "Unknown Card", flat: "-", status: "DENIED", reason: "Card is not registered", ts: now0 - 9 * 60000 },
+    { uid: "A1:B2:C3:D4", name: "Rahul Sharma", flat: "A-101", status: "GRANTED", reason: "Welcome!", ts: now0 - 12 * 60000 }
+  ];
+  var stats = { granted: 2, denied: 1 };
+  var busy = false;
+  var freshTs = 0;
+  var VISITOR_UID = "5A:5A:5A:01";
+  var notes = [];      // notifications sent to resident phones
+  var pending = null;  // visitor waiting for a resident to answer
+
+  function normalizeUid(raw) {
+    var hex = String(raw || "").replace(/[^0-9a-fA-F]/g, "").toUpperCase();
+    if ([8, 14, 20].indexOf(hex.length) < 0) return null;
+    return hex.match(/.{2}/g).join(":");
+  }
+  function findResident(uid) { return residents.filter(function (r) { return r.uid === uid; })[0]; }
+
+  /* "POST /api/scan" */
+  function processScan(uid) {
+    var r = findResident(uid), status, name, flat, reason;
+    if (!r) { status = "DENIED"; name = "Unknown Card"; flat = "-"; reason = "Card is not registered"; }
+    else if (!r.active) { status = "DENIED"; name = r.name; flat = r.flat; reason = "Card is blocked"; }
+    else { status = "GRANTED"; name = r.name; flat = r.flat; reason = "Welcome!"; }
+    stats[status === "GRANTED" ? "granted" : "denied"]++;
+    var entry = { uid: uid, name: name, flat: flat, status: status, reason: reason, ts: Date.now() };
+    logs.unshift(entry);
+    logs.length = Math.min(logs.length, 50);
+    freshTs = entry.ts;
+    return entry;
+  }
+
+  /* ---------- Hardware simulation ---------- */
+  function serial(msg, cls) {
+    var box = $("#serial");
+    box.append(h("div", { class: cls || "" }, msg));
+    while (box.children.length > 60) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+  }
+  function setLed(state) {
+    $("#led").setAttribute("class", state || "");
+    $("#ledGlow").setAttribute("class", state || "");
+  }
+  function setServo(angle) {
+    $("#arm").style.transform = "rotate(" + (-angle) + "deg)";
+    $("#servoAngle").textContent = angle + "°";
+    $("#gateState").textContent = angle > 0 ? "OPEN" : "CLOSED";
+  }
+  function setReader(t) { $("#readerState").textContent = t; }
+
+  async function tapCard(uid) {
+    if (busy) return;
+    busy = true; renderCards();
+    setReader("reading card"); setLed("scan");
+    serial("Card UID: " + uid, "acc");
+    await sleep(450);
+    serial("POST /api/scan  {\"uid\":\"" + uid + "\",\"device\":\"gate-1\"}", "dim");
+    await sleep(500);
+    var res = processScan(uid);
+    serial("Server response (200): {\"status\":\"" + res.status + "\",\"name\":\"" + res.name + "\"}", "dim");
+    renderAll();
+    if (res.status === "GRANTED") {
+      setLed("ok"); setReader("access granted");
+      serial("Gate OPEN", "ok"); setServo(90);
+      await sleep(3000);
+      setServo(0); setLed("");
+      serial("Gate CLOSED", "ok");
+      await sleep(700);
+    } else {
+      setReader("access denied");
+      serial("Access DENIED: " + res.reason, "bad");
+      for (var i = 0; i < 3; i++) { setLed("deny"); await sleep(170); setLed(""); await sleep(170); }
+      setLed("deny"); await sleep(300); setLed("");
+    }
+    setReader("ready");
+    busy = false; renderCards();
+    serial("Card scan karo...", "dim");
+  }
+
+  /* ---------- Visitor flow ---------- */
+  function beep() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      var ctx = new AC(), t = ctx.currentTime;
+      [880, 1175].forEach(function (f, i) {
+        var o = ctx.createOscillator(), g = ctx.createGain(), s = t + i * 0.18;
+        o.type = "sine"; o.frequency.value = f;
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.0001, s);
+        g.gain.exponentialRampToValueAtTime(0.15, s + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, s + 0.16);
+        o.start(s); o.stop(s + 0.18);
+      });
+      setTimeout(function () { try { ctx.close(); } catch (e) {} }, 800);
+    } catch (e) {}
+  }
+  function ring() {
+    var p = $("#phone");
+    p.classList.remove("ring"); void p.offsetWidth; p.classList.add("ring");
+  }
+  function renderSelects() {
+    ["#vWho", "#pSel"].forEach(function (id) {
+      var sel = $(id), keep = sel.value;
+      sel.textContent = "";
+      residents.forEach(function (r) { sel.append(h("option", { value: r.uid }, r.name + " · " + r.flat)); });
+      if (keep && findResident(keep)) sel.value = keep;
+    });
+  }
+  function resolvePending(decision) {
+    if (pending && pending.resolve) { var r = pending.resolve; pending.resolve = null; r(decision); }
+  }
+  function renderPhone() {
+    var box = $("#phoneList"), uid = $("#pSel").value;
+    var r = findResident(uid);
+    $("#phoneName").textContent = r ? r.name + " · " + r.flat : "";
+    box.textContent = "";
+    var mine = notes.filter(function (n) { return n.toUid === uid; });
+    if (!mine.length) {
+      box.append(h("div", { class: "p-empty" }, "No notifications yet. Use Visitor Check-in and tap the visitor pass."));
+      return;
+    }
+    mine.forEach(function (n) {
+      var title = n.state === "pending" ? "Visitor at the gate"
+        : n.state === "allowed" ? "Visitor allowed"
+        : n.state === "declined" ? "Visitor declined" : "Request expired";
+      var card = h("div", { class: "notif " + n.state },
+        h("div", { class: "n-top" }, h("span", null, "Main Gate"), h("span", null, fmtTime(n.ts))),
+        h("div", { class: "n-title" }, title),
+        h("div", { class: "n-body" }, n.visitor + " is here to meet you (" + n.purpose.toLowerCase() + ")."));
+      if (n.state === "pending") {
+        card.append(h("div", { class: "n-actions" },
+          h("button", { class: "btn sm", type: "button", onclick: function () { resolvePending("allow"); } }, "Allow entry"),
+          h("button", { class: "btn ghost sm", type: "button", onclick: function () { resolvePending("deny"); } }, "Decline")));
+      }
+      box.append(card);
+    });
+  }
+  async function runGate(allowed, reason) {
+    if (allowed) {
+      setLed("ok"); setReader("access granted");
+      serial("Gate OPEN", "ok"); setServo(90);
+      await sleep(3000);
+      setServo(0); setLed("");
+      serial("Gate CLOSED", "ok");
+      await sleep(700);
+    } else {
+      setReader("access denied");
+      serial("Access DENIED: " + reason, "bad");
+      for (var i = 0; i < 3; i++) { setLed("deny"); await sleep(170); setLed(""); await sleep(170); }
+      setLed("deny"); await sleep(300); setLed("");
+    }
+  }
+  async function tapVisitor() {
+    if (busy) return;
+    var target = findResident($("#vWho").value);
+    if (!target) return;
+    var vname = $("#vName").value.trim() || "Visitor";
+    var purpose = $("#vPurpose").value;
+    busy = true; renderCards();
+    setReader("reading visitor pass"); setLed("scan");
+    serial("Card UID: " + VISITOR_UID + "  (visitor pass)", "acc");
+    await sleep(450);
+    serial("POST /api/scan  {\"uid\":\"" + VISITOR_UID + "\",\"device\":\"gate-1\",\"visit\":\"" + target.flat + "\"}", "dim");
+    await sleep(500);
+
+    var entry = { uid: VISITOR_UID, name: vname + " (visitor)", flat: target.flat, status: "PENDING",
+                  reason: "Waiting for " + target.name + " to respond", ts: Date.now() };
+    logs.unshift(entry); logs.length = Math.min(logs.length, 50);
+    freshTs = entry.ts;
+    var note = { toUid: target.uid, visitor: vname, purpose: purpose, ts: entry.ts, state: "pending" };
+    notes.unshift(note);
+    $("#pSel").value = target.uid;
+    var p = { entry: entry, note: note };
+    pending = p;
+
+    serial("Server response (200): {\"status\":\"PENDING\",\"notify\":\"" + target.name + "\"}", "dim");
+    serial("Notification sent to " + target.name + ". Waiting for approval...", "acc");
+    setReader("waiting for " + target.name.split(" ")[0]);
+    ring(); beep(); renderAll(); renderPhone();
+
+    var decision = await new Promise(function (res) {
+      p.resolve = res;
+      p.timer = setTimeout(function () { res("expired"); }, 45000);
+    });
+    clearTimeout(p.timer);
+    pending = null;
+
+    var allowed = decision === "allow";
+    note.state = allowed ? "allowed" : (decision === "deny" ? "declined" : "expired");
+    entry.status = allowed ? "GRANTED" : "DENIED";
+    entry.reason = decision === "allow" ? purpose + " visit approved by " + target.name
+                 : decision === "deny" ? purpose + " visit declined by " + target.name
+                 : "No response from " + target.name;
+    entry.resolvedAt = Date.now();
+    freshTs = entry.ts;
+    stats[allowed ? "granted" : "denied"]++;
+    serial(decision === "expired" ? "No response from " + target.name : "Resident replied: " + decision.toUpperCase(), allowed ? "ok" : "bad");
+    renderAll(); renderPhone();
+
+    await runGate(allowed, entry.reason);
+    setReader("ready"); busy = false; renderCards();
+    serial("Card scan karo...", "dim");
+  }
+
+  /* ---------- Rendering ---------- */
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  function ago(ts) {
+    var s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (s < 60) return s + "s ago";
+    return Math.floor(s / 60) + " min ago";
+  }
+
+  function renderCards() {
+    var vt = $("#vTap"); if (vt) vt.disabled = busy;
+    var box = $("#cards");
+    box.textContent = "";
+    var all = residents.map(function (r) { return { uid: r.uid, name: r.name, flat: r.flat, active: r.active, unknown: false }; });
+    all.push({ uid: UNKNOWN_UID, name: "Unregistered card", flat: "", active: true, unknown: true });
+    all.forEach(function (c) {
+      var tag = c.unknown ? "Not in system" : (c.active ? "Flat " + c.flat : "Blocked · " + c.flat);
+      var b = h("button", { class: "rfid" + (c.active ? "" : " blocked") + (c.unknown ? " unknown" : ""), type: "button",
+                            "aria-label": "Tap card of " + c.name,
+                            onclick: function () { tapCard(c.uid); } },
+        h("div", { class: "top" }, h("span", { class: "chip" }), h("span", { class: "tag" }, tag)),
+        h("div", { class: "nm" }, c.name),
+        h("div", { class: "uid" }, c.uid));
+      if (busy) b.disabled = true;
+      box.append(b);
+    });
+  }
+
+  function renderBanner() {
+    var b = $("#banner"), latest = logs[0];
+    if (pending) {
+      b.className = "banner pending";
+      $("#bBig").textContent = "Visitor waiting";
+      $("#bWho").textContent = pending.entry.name + " · Flat " + pending.entry.flat;
+      $("#bSub").textContent = "Resident notified. Waiting for approval.";
+    } else if (latest && Date.now() - (latest.resolvedAt || latest.ts) < 6000 && latest.ts >= now0) {
+      var ok = latest.status === "GRANTED";
+      b.className = "banner " + (ok ? "granted" : "denied");
+      $("#bBig").textContent = ok ? "✔ Access Granted" : "✖ Access Denied";
+      $("#bWho").textContent = latest.name + (latest.flat !== "-" ? " · Flat " + latest.flat : "");
+      $("#bSub").textContent = ok ? "Gate is opening" : latest.reason + " (" + latest.uid + ")";
+    } else {
+      b.className = "banner idle";
+      $("#bBig").textContent = "Waiting for scan";
+      $("#bWho").textContent = "Tap a card on the reader to begin.";
+      $("#bSub").textContent = "";
+    }
+  }
+
+  function renderLogs() {
+    var body = $("#logBody");
+    body.textContent = "";
+    logs.forEach(function (l) {
+      var tr = h("tr", { class: (l.ts === freshTs && Date.now() - (l.resolvedAt || l.ts) < 1500) ? "fresh" : "" },
+        h("td", { class: "mono", title: ago(l.ts) }, fmtTime(l.ts) + " · " + ago(l.ts)),
+        h("td", null, l.name),
+        h("td", null, l.flat),
+        h("td", { class: "mono" }, l.uid),
+        h("td", null, h("span", { class: "badge " + l.status }, l.status)),
+        h("td", null, l.reason));
+      body.append(tr);
+    });
+  }
+
+  function renderResidents() {
+    var body = $("#resBody");
+    body.textContent = "";
+    residents.forEach(function (r) {
+      var btn = h("button", { class: "btn ghost sm", type: "button",
+        onclick: function () { r.active = !r.active; renderAll(); renderCards(); } },
+        r.active ? "Block card" : "Unblock card");
+      body.append(h("tr", null,
+        h("td", null, r.name), h("td", null, r.flat), h("td", { class: "mono" }, r.uid),
+        h("td", null, h("span", { class: "badge " + (r.active ? "on" : "off") }, r.active ? "Active" : "Blocked"), " ", btn)));
+    });
+  }
+
+  function renderStats() {
+    $("#sG").textContent = stats.granted;
+    $("#sD").textContent = stats.denied;
+    $("#sR").textContent = residents.length;
+  }
+
+  function renderAll() { renderBanner(); renderStats(); renderLogs(); renderResidents(); }
+
+  /* ---------- Register form ---------- */
+  function randomUid() {
+    var parts = [];
+    for (var i = 0; i < 4; i++) {
+      var n = Math.floor(Math.random() * 256).toString(16).toUpperCase();
+      parts.push(n.length < 2 ? "0" + n : n);
+    }
+    return parts.join(":");
+  }
+  $("#randUid").onclick = function () { $("#rUid").value = randomUid(); };
+  $("#regForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msg = $("#regMsg");
+    var uid = normalizeUid($("#rUid").value);
+    var name = $("#rName").value.trim(), flat = $("#rFlat").value.trim();
+    if (!uid) { msg.textContent = "UID needs 4, 7 or 10 hex bytes, for example A1:B2:C3:D4."; return; }
+    if (!name || !flat) { msg.textContent = "Enter both the name and the flat number."; return; }
+    if (findResident(uid)) { msg.textContent = "This card is already registered."; return; }
+    residents.push({ uid: uid, name: name.slice(0, 40), flat: flat.slice(0, 10), active: true });
+    msg.textContent = name + " registered. Their card is now in the RFID Cards list.";
+    $("#regForm").reset();
+    renderSelects();
+    renderAll(); renderCards();
+  });
+
+  /* ---------- Boot ---------- */
+  function tickClock() { $("#clock").innerHTML = ""; $("#clock").append(h("b", null, new Date().toLocaleTimeString("en-IN"))); }
+  serial("RC522 ready.", "dim");
+  serial("Wi-Fi connected! ESP32 IP: 192.168.1.42", "ok");
+  serial("Card scan karo...", "dim");
+  renderSelects(); renderPhone();
+  $("#pSel").onchange = renderPhone;
+  $("#visForm").addEventListener("submit", function (e) { e.preventDefault(); tapVisitor(); });
+  renderCards(); renderAll(); tickClock();
+  setInterval(function () { tickClock(); renderAll(); }, 2000);  // dashboard auto-refresh
+  setInterval(tickClock, 1000);
+})();
+</script>
+</body>
+</html>
